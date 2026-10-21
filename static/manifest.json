@@ -1,0 +1,24 @@
+{
+  "name": "MediaDownloader - Universal Video & Song Downloader",
+  "short_name": "MediaDownloader",
+  "description": "Download videos, reels, clips, and high-fidelity MP3 music from YouTube, Instagram, Facebook, TikTok, Twitter, and more.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0F17",
+  "theme_color": "#151D2A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

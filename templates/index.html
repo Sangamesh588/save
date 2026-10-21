@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Video & Audio Downloader</title>
+    <!-- PWA Manifest & Meta -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#10B981">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
+    <!-- Clean Typography & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=4.0">
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="top-header">
+        <div class="header-inner">
+            <a href="/" class="brand-link">
+                <i class="fa-solid fa-circle-down brand-icon"></i>
+                <span class="brand-name">MediaDownloader</span>
+            </a>
+            <div class="header-right">
+                <button type="button" id="pwaInstallBtn" class="btn-install-pwa" style="display: none;">
+                    <i class="fa-solid fa-mobile-screen"></i> Install App
+                </button>
+                <span class="supported-tag">YouTube • Instagram • Facebook • TikTok • X • SoundCloud</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-container">
+        <!-- Hero & Search Input -->
+        <section class="search-section">
+            <div class="hero-pill-badge">
+                <i class="fa-solid fa-shield-halved"></i> 100% Free • Unlimited • Clip Trimming • ID3 Music Tagging
+            </div>
+            <h1 class="page-title">Download & Watch <span>Any Video or Song</span></h1>
+            <p class="page-desc">Save videos and studio-quality MP3 songs from YouTube, Instagram, Facebook, TikTok, and Twitter. Watch directly in your browser or save to your device.</p>
+
+            <form id="urlForm" class="search-box" onsubmit="event.preventDefault(); fetchMediaDetails();">
+                <div class="search-input-wrap">
+                    <i class="fa-solid fa-link input-icon" id="platformIcon"></i>
+                    <input 
+                        type="url" 
+                        id="urlInput" 
+                        placeholder="Paste video, reel, post, or music link here..." 
+                        autocomplete="off" 
+                        required 
+                    />
+                    <button type="button" id="clearBtn" class="btn-text-action" style="display: none;" title="Clear">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <button type="button" id="pasteBtn" class="btn-paste" title="Paste link">
+                        <i class="fa-regular fa-clipboard"></i> Paste
+                    </button>
+                </div>
+                <button type="submit" id="submitBtn" class="btn-primary">
+                    <span class="btn-label"><i class="fa-solid fa-arrow-down"></i> Get Download Options</span>
+                    <span class="btn-loading" style="display: none;"><i class="fa-solid fa-spinner fa-spin"></i> Checking link...</span>
+                </button>
+            </form>
+
+            <!-- Supported Apps Badges -->
+            <div class="apps-bar">
+                <span class="app-pill"><i class="fa-brands fa-youtube" style="color: #ef4444;"></i> YouTube</span>
+                <span class="app-pill"><i class="fa-brands fa-instagram" style="color: #f43f5e;"></i> Instagram Reels</span>
+                <span class="app-pill"><i class="fa-brands fa-facebook" style="color: #3b82f6;"></i> Facebook</span>
+                <span class="app-pill"><i class="fa-brands fa-tiktok" style="color: #06b6d4;"></i> TikTok</span>
+                <span class="app-pill"><i class="fa-brands fa-x-twitter"></i> X / Twitter</span>
+                <span class="app-pill"><i class="fa-brands fa-soundcloud" style="color: #f97316;"></i> SoundCloud</span>
+            </div>
+
+            <!-- Error Notification -->
+            <div id="errorBox" class="alert-box error" style="display: none;">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <div id="errorMessage" class="alert-text">Error message</div>
+                <button type="button" class="alert-close" onclick="hideError()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </section>
+
+        <!-- DOWNLOADED MEDIA PLAYER (Watch directly on screen!) -->
+        <section id="watchSection" class="watch-section" style="display: none;">
+            <div class="section-card player-card">
+                <div class="card-header">
+                    <div class="status-indicator">
+                        <span class="status-dot"></span>
+                        <h2 class="card-heading" id="playerTitle">Downloaded Media</h2>
+                    </div>
+                    <span class="file-size-tag" id="playerFileSize">Ready to Watch</span>
+                </div>
+
+                <!-- Video Player -->
+                <div class="video-container" id="videoPlayerContainer">
+                    <video id="mainVideoPlayer" controls playsinline preload="metadata">
+                        Your browser does not support HTML5 video playback.
+                    </video>
+                </div>
+
+                <!-- Audio Player (with Album Art Display) -->
+                <div class="audio-container" id="audioPlayerContainer" style="display: none;">
+                    <div class="audio-info-row">
+                        <img id="audioPlayerThumb" src="" alt="Album Art" class="audio-cover-art" />
+                        <div class="audio-track-details">
+                            <h3 id="audioTrackTitle">Audio Track</h3>
+                            <p id="audioTrackArtist"><i class="fa-solid fa-circle-check" style="color: #10B981;"></i> ID3 Album Art & Artist Tagged</p>
+                        </div>
+                    </div>
+                    <audio id="mainAudioPlayer" controls style="width: 100%;">
+                        Your browser does not support audio playback.
+                    </audio>
+                </div>
+
+                <!-- Action Controls Below Player -->
+                <div class="player-actions">
+                    <a id="saveFileBtn" href="#" class="btn-success" download>
+                        <i class="fa-solid fa-download"></i> Save File to Computer
+                    </a>
+                    <button type="button" class="btn-secondary" onclick="scrollToOptions()">
+                        <i class="fa-solid fa-sliders"></i> Download Another Format
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Media Details & Options Card -->
+        <section id="mediaSection" class="media-section" style="display: none;">
+            <div class="section-card">
+                <!-- Info Header -->
+                <div class="media-info-header">
+                    <div class="thumb-wrapper">
+                        <img id="mediaThumb" src="" alt="Thumbnail" />
+                        <span id="mediaDurationBadge" class="duration-tag">0:00</span>
+                    </div>
+                    <div class="media-meta">
+                        <div class="meta-top-row">
+                            <span class="platform-badge" id="mediaPlatform">Platform</span>
+                            <span class="id3-badge"><i class="fa-solid fa-tag"></i> Auto ID3 Cover Art</span>
+                            <span id="subsStatusBadge" class="subs-indicator-badge available"><i class="fa-solid fa-closed-captioning"></i> Captions Available</span>
+                        </div>
+                        <h2 id="mediaTitleText" class="video-title">Video Title</h2>
+                        <p class="channel-text"><i class="fa-regular fa-user"></i> <span id="mediaUploader">Channel</span></p>
+
+                        <!-- Extra Utilities Toolbar -->
+                        <div class="media-actions-toolbar">
+                            <button type="button" class="btn-tool" onclick="downloadHDThumbnail()" title="Download original high-res thumbnail">
+                                <i class="fa-solid fa-image"></i> HD Thumbnail
+                            </button>
+                            <button type="button" class="btn-tool" id="subtitlesToolbarBtn" onclick="selectTab('subtitles')" title="Download subtitles and transcripts">
+                                <i class="fa-solid fa-closed-captioning"></i> Subtitles & Script
+                            </button>
+                            <button type="button" class="btn-tool" id="togglePreviewBtn" onclick="toggleEmbeddedPreview()" style="display: none;">
+                                <i class="fa-solid fa-play"></i> Watch Preview
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Embedded Preview Player -->
+                <div id="embedPreviewWrapper" class="embedded-preview" style="display: none;">
+                    <div class="preview-header">
+                        <span><i class="fa-solid fa-play"></i> Online Player</span>
+                        <button type="button" class="btn-icon-small" onclick="toggleEmbeddedPreview()"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="iframe-container" id="iframeContainer"></div>
+                </div>
+
+                <!-- ✂️ VIDEO & AUDIO TRIMMER / CLIP CUTTER BOX -->
+                <div class="trimmer-box">
+                    <div class="trimmer-header" onclick="toggleTrimmer()">
+                        <div class="trimmer-title">
+                            <i class="fa-solid fa-scissors" style="color: #10B981;"></i>
+                            <strong>Clip Cutter / Trimmer</strong>
+                            <span class="trimmer-sub">(Download only a portion, highlight, or meme)</span>
+                        </div>
+                        <div class="trimmer-toggle-icon">
+                            <input type="checkbox" id="trimmerActive" onchange="event.stopPropagation(); syncTrimmerUI();" />
+                            <label for="trimmerActive" class="trimmer-switch-label">Enable Clip Trim</label>
+                        </div>
+                    </div>
+
+                    <div id="trimmerControls" class="trimmer-body" style="display: none;">
+                        <p class="trimmer-help">Specify start and end time to download only that exact segment:</p>
+                        <div class="trimmer-inputs-row">
+                            <div class="time-input-group">
+                                <label for="trimStart">Start Time:</label>
+                                <input type="text" id="trimStart" placeholder="00:00" value="00:00" />
+                            </div>
+                            <div class="time-input-group">
+                                <label for="trimEnd">End Time:</label>
+                                <input type="text" id="trimEnd" placeholder="00:30" />
+                            </div>
+                            <div class="quick-clip-buttons">
+                                <button type="button" class="btn-quick-clip" onclick="setQuickClip(15)">First 15s</button>
+                                <button type="button" class="btn-quick-clip" onclick="setQuickClip(30)">First 30s</button>
+                                <button type="button" class="btn-quick-clip" onclick="setQuickClip(60)">First 1 Min</button>
+                                <button type="button" class="btn-quick-clip reset" onclick="resetClip()">Full Video</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs: Video, Audio/Song, Subtitles -->
+                <div class="tabs-container">
+                    <button type="button" class="tab-button active" id="tabVideo" onclick="selectTab('video')">
+                        <i class="fa-solid fa-film"></i> Video Downloads (MP4)
+                    </button>
+                    <button type="button" class="tab-button" id="tabAudio" onclick="selectTab('audio')">
+                        <i class="fa-solid fa-music"></i> Songs & MP3 (Tagged)
+                    </button>
+                    <button type="button" class="tab-button" id="tabSubtitles" onclick="selectTab('subtitles')">
+                        <i class="fa-solid fa-closed-captioning"></i> Subtitles & Transcripts
+                    </button>
+                </div>
+
+                <!-- Video Quality Options Table -->
+                <div id="videoTabPanel" class="tab-panel">
+                    <div class="table-wrap">
+                        <table class="quality-table">
+                            <thead>
+                                <tr>
+                                    <th>Resolution</th>
+                                    <th>Format</th>
+                                    <th>File Size</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="videoOptionsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Audio Quality Options Table -->
+                <div id="audioTabPanel" class="tab-panel" style="display: none;">
+                    <div class="table-wrap">
+                        <table class="quality-table">
+                            <thead>
+                                <tr>
+                                    <th>Audio Quality</th>
+                                    <th>Format</th>
+                                    <th>Features</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audioOptionsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Subtitles / Transcript Panel -->
+                <div id="subtitlesTabPanel" class="tab-panel" style="display: none;">
+                    <div class="subtitles-card">
+                        <div class="subtitles-info">
+                            <h4><i class="fa-solid fa-closed-captioning" style="color: #10B981;"></i> Video Captions & Transcripts</h4>
+                            <p id="subtitlesCardDesc">Download subtitles for video editing, translation, or readable transcripts.</p>
+                        </div>
+                        <div class="subtitles-actions">
+                            <button type="button" class="btn-secondary" id="downloadSrtBtn" onclick="downloadSubtitles('srt')">
+                                <i class="fa-solid fa-file-lines"></i> Download Subtitles (.SRT)
+                            </button>
+                            <button type="button" class="btn-secondary" id="downloadTxtBtn" onclick="downloadSubtitles('txt')">
+                                <i class="fa-solid fa-file-lines"></i> Download Clean Transcript (.TXT)
+                            </button>
+                        </div>
+                        <div id="subtitlesNotice" style="margin-top: 10px; font-size: 0.85rem; color: #64748B;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Progress Modal -->
+        <div id="progressModal" class="modal-backdrop" style="display: none;">
+            <div class="modal-card">
+                <div class="modal-top">
+                    <h3 class="modal-title"><i class="fa-solid fa-spinner fa-spin"></i> Processing Media</h3>
+                    <button type="button" class="btn-icon-small" onclick="closeProgressModal()"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="modal-content-area">
+                    <p id="modalFileName" class="modal-filename">Extracting stream...</p>
+
+                    <div class="progress-track">
+                        <div id="progressBarFill" class="progress-fill" style="width: 0%;"></div>
+                    </div>
+
+                    <div class="progress-stats">
+                        <span id="progressPercent">0%</span>
+                        <span id="progressSpeed"></span>
+                    </div>
+
+                    <p id="progressStatusMsg" class="progress-status-desc">Connecting to media server...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- How It Works Information -->
+        <section class="info-section">
+            <h3 class="info-title">Features & How It Works</h3>
+            <div class="steps-row">
+                <div class="step-item">
+                    <span class="step-idx">1</span>
+                    <strong>Paste Any Link</strong>
+                    <p>Supports YouTube, Instagram Reels, Facebook, TikTok, and X with one click.</p>
+                </div>
+                <div class="step-item">
+                    <span class="step-idx">2</span>
+                    <strong>Clip & Custom Quality</strong>
+                    <p>Optionally trim any clip length or extract studio 320kbps MP3s with album cover art.</p>
+                </div>
+                <div class="step-item">
+                    <span class="step-idx">3</span>
+                    <strong>Watch & Save</strong>
+                    <p>Watch your downloaded video in the on-screen player and save it directly to your device.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="page-footer">
+        <p>© 2026 MediaDownloader. Clean, fast universal media utility with clip trimming and ID3 tagging.</p>
+    </footer>
+
+    <script src="/static/js/app.js?v=4.0"></script>
+</body>
+</html>

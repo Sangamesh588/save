@@ -1,0 +1,9 @@
+flask>=3.0.0
+flask-cors>=4.0.0
+flask-limiter>=3.5.0
+waitress>=3.0.0
+yt-dlp>=2024.8.0
+imageio-ffmpeg>=0.5.0
+requests>=2.31.0
+mutagen>=1.47.0
+pillow>=10.0.0

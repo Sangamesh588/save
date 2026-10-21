@@ -1,0 +1,26 @@
+# Downloads & Temp media
+downloads/
+*.mp4
+*.mp3
+*.m4a
+*.wav
+*.part
+*.ytdl
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+.venv/
+env/
+venv/
+
+# Antigravity & scratch
+.system_generated/
+scratch/
+*.log
+
+# OS files
+Thumbs.db
+.DS_Store
