@@ -111,7 +111,28 @@ def get_base_ydl_opts() -> dict:
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
         ),
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios"],
+                "player_skip": ["configs", "webpage"]
+            }
+        }
     }
+
+    # Support optional cookies (via YOUTUBE_COOKIES env var or cookies.txt file)
+    cookies_env = os.environ.get("YOUTUBE_COOKIES")
+    cookies_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+    if cookies_env:
+        temp_cookies = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
+        try:
+            with open(temp_cookies, "w", encoding="utf-8") as f:
+                f.write(cookies_env)
+            opts["cookiefile"] = temp_cookies
+        except Exception:
+            pass
+    elif os.path.exists(cookies_file) and os.path.getsize(cookies_file) > 10:
+        opts["cookiefile"] = cookies_file
+
     if FFMPEG_PATH and os.path.exists(FFMPEG_PATH):
         opts["ffmpeg_location"] = FFMPEG_PATH
     return opts
