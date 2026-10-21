@@ -108,6 +108,8 @@ def fetch_info():
             err_msg = "This URL or platform is not supported, or the link is private."
         elif "Video unavailable" in err_msg:
             err_msg = "The video is unavailable, private, or age-restricted."
+        elif "Sign in to confirm you" in err_msg or "bot" in err_msg.lower():
+            err_msg = "YouTube flagged this cloud server IP for bot verification. You can add your YouTube cookies in Vercel settings (YOUTUBE_COOKIES) or run on Render/locally to bypass this."
         return jsonify({"success": False, "error": err_msg}), 400
 
 
