@@ -115,7 +115,8 @@ def get_base_ydl_opts() -> dict:
             "youtube": {
                 "player_client": ["android", "ios"]
             }
-        }
+        },
+        "ignore_no_formats_error": True,
     }
 
     # Support optional cookies if explicitly configured
@@ -205,6 +206,7 @@ def extract_media_info(url: str) -> Dict[str, Any]:
 
     opts = get_base_ydl_opts()
     opts["extract_flat"] = False
+    opts["format"] = "all"
 
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
