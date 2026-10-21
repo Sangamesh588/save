@@ -6,16 +6,27 @@ import shutil
 import logging
 import threading
 import subprocess
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional, Tuple
 import yt_dlp
-import imageio_ffmpeg
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("downloader")
 
-DOWNLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+# Serverless & Read-only Filesystem compatibility (Vercel / AWS Lambda / Containers)
+# On Vercel, /var/task is read-only, only /tmp is writable
+if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or not os.access(os.path.dirname(os.path.abspath(__file__)), os.W_OK):
+    DOWNLOAD_DIR = os.path.join(tempfile.gettempdir(), "save_downloads")
+else:
+    DOWNLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
+
+try:
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+except Exception as e:
+    logger.warning(f"Could not create primary DOWNLOAD_DIR: {e}. Falling back to system temp.")
+    DOWNLOAD_DIR = os.path.join(tempfile.gettempdir(), "save_downloads")
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 # Concurrency & Traffic Control: ThreadPool for heavy FFmpeg/download workers
 MAX_CONCURRENT_DOWNLOADS = 8
@@ -29,7 +40,14 @@ INFO_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
 INFO_CACHE_LOCK = threading.Lock()
 INFO_CACHE_TTL = 900  # 15 minutes
 
-FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
+# Safe FFmpeg detection (avoids read-only unpacking crashes on Vercel)
+FFMPEG_PATH = None
+try:
+    import imageio_ffmpeg
+    FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
+except Exception as e:
+    logger.warning(f"imageio_ffmpeg lookup failed ({e}), checking system PATH...")
+    FFMPEG_PATH = shutil.which("ffmpeg")
 
 
 def cleanup_old_jobs(max_age_seconds: int = 1800):
@@ -67,12 +85,14 @@ def cleanup_old_jobs(max_age_seconds: int = 1800):
             logger.error(f"Error in cleanup thread: {e}")
 
 
-cleanup_thread = threading.Thread(target=cleanup_old_jobs, daemon=True)
-cleanup_thread.start()
+# Only start background infinite loop if not in Serverless (Vercel freezes background loops)
+if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    cleanup_thread = threading.Thread(target=cleanup_old_jobs, daemon=True)
+    cleanup_thread.start()
 
 
-def check_disk_space_ok(min_free_bytes: int = 1024 * 1024 * 1024) -> bool:
-    """Returns False if available server disk space is under 1GB."""
+def check_disk_space_ok(min_free_bytes: int = 500 * 1024 * 1024) -> bool:
+    """Returns False if available server disk space is critically low."""
     try:
         usage = shutil.disk_usage(DOWNLOAD_DIR)
         return usage.free >= min_free_bytes
@@ -81,8 +101,7 @@ def check_disk_space_ok(min_free_bytes: int = 1024 * 1024 * 1024) -> bool:
 
 
 def get_base_ydl_opts() -> dict:
-    return {
-        "ffmpeg_location": FFMPEG_PATH,
+    opts = {
         "quiet": True,
         "no_warnings": True,
         "nocheckcertificate": True,
@@ -93,6 +112,9 @@ def get_base_ydl_opts() -> dict:
             "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
         ),
     }
+    if FFMPEG_PATH and os.path.exists(FFMPEG_PATH):
+        opts["ffmpeg_location"] = FFMPEG_PATH
+    return opts
 
 
 def detect_platform(url: str) -> str:
@@ -153,7 +175,6 @@ def format_duration(seconds: Optional[int]) -> str:
 
 def extract_media_info(url: str) -> Dict[str, Any]:
     """Extracts platform, title, duration, thumbnail, quality options, and subtitles with high-speed memory caching."""
-    # Check in-memory cache first to handle 100s of users querying same media
     now = time.time()
     with INFO_CACHE_LOCK:
         if url in INFO_CACHE:
@@ -273,6 +294,9 @@ def extract_media_info(url: str) -> Dict[str, Any]:
 
 def apply_ffmpeg_trim(input_file: str, start_time: str, end_time: str) -> str:
     """Uses FFmpeg to cut an exact snippet from start_time to end_time."""
+    if not FFMPEG_PATH:
+        return input_file
+
     dir_name = os.path.dirname(input_file)
     base_name, ext = os.path.splitext(os.path.basename(input_file))
     clean_start = start_time.replace(":", "_")
@@ -326,7 +350,7 @@ def download_media_job(job_id: str, url: str, media_type: str, quality: str, aud
                 if job_id in JOBS:
                     JOBS[job_id]["status"] = "processing"
                     JOBS[job_id]["progress"] = 92
-                    JOBS[job_id]["status_text"] = "Encoding & embedding album art with FFmpeg..."
+                    JOBS[job_id]["status_text"] = "Encoding & verifying media with FFmpeg..."
 
     out_template = os.path.join(job_folder, "%(title).80s [%(id)s].%(ext)s")
     opts = get_base_ydl_opts()
@@ -340,28 +364,28 @@ def download_media_job(job_id: str, url: str, media_type: str, quality: str, aud
                 codec = "mp3"
 
             opts["format"] = "bestaudio/best"
-            opts["writethumbnail"] = True
+            postprocessors = []
 
-            postprocessors = [
-                {
+            if FFMPEG_PATH:
+                opts["writethumbnail"] = True
+                postprocessors.append({
                     "key": "FFmpegExtractAudio",
                     "preferredcodec": codec,
-                },
-                {
+                })
+                postprocessors.append({
                     "key": "FFmpegMetadata",
                     "add_metadata": True,
-                }
-            ]
-
-            if codec == "mp3":
-                bitrate = quality if quality in ["320", "256", "192", "128"] else "320"
-                postprocessors[0]["preferredquality"] = bitrate
-                postprocessors.append({
-                    "key": "EmbedThumbnail",
-                    "already_have_thumbnail": False,
                 })
+                if codec == "mp3":
+                    bitrate = quality if quality in ["320", "256", "192", "128"] else "320"
+                    postprocessors[0]["preferredquality"] = bitrate
+                    postprocessors.append({
+                        "key": "EmbedThumbnail",
+                        "already_have_thumbnail": False,
+                    })
 
-            opts["postprocessors"] = postprocessors
+            if postprocessors:
+                opts["postprocessors"] = postprocessors
 
         else:
             if quality and quality != "0" and quality.isdigit():
@@ -378,10 +402,11 @@ def download_media_job(job_id: str, url: str, media_type: str, quality: str, aud
                     "best"
                 )
 
-            opts["merge_output_format"] = "mp4"
-            opts["postprocessor_args"] = {
-                "merger": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k"]
-            }
+            if FFMPEG_PATH:
+                opts["merge_output_format"] = "mp4"
+                opts["postprocessor_args"] = {
+                    "merger": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k"]
+                }
 
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.extract_info(url, download=True)
@@ -395,7 +420,7 @@ def download_media_job(job_id: str, url: str, media_type: str, quality: str, aud
             target_file = files[0]
             full_path = os.path.join(job_folder, target_file)
 
-            if start_time and start_time.strip():
+            if start_time and start_time.strip() and FFMPEG_PATH:
                 with JOBS_LOCK:
                     if job_id in JOBS:
                         JOBS[job_id]["status_text"] = "Trimming clip precisely with FFmpeg..."
@@ -434,7 +459,6 @@ def start_download_job(
     start_time: Optional[str] = None,
     end_time: Optional[str] = None
 ) -> str:
-    # Check server disk space safety guard
     if not check_disk_space_ok():
         raise RuntimeError("Server storage is temporarily full. Please wait a few minutes while disk cleanup runs.")
 
@@ -454,7 +478,7 @@ def start_download_job(
             "created_at": time.time(),
         }
 
-    # Submit to bounded thread pool to control server load across 100s of users
+    # If in Serverless mode (Vercel), run synchronously or in pool
     DOWNLOAD_POOL.submit(
         download_media_job,
         job_id, url, media_type, quality, audio_format, start_time, end_time
@@ -503,7 +527,8 @@ def download_subtitles_content(url: str, as_plain_text: bool = False) -> Tuple[s
     opts["subtitleslangs"] = [target_lang]
     opts["subtitlesformat"] = "srt/best"
     opts["ignoreerrors"] = True
-    opts["postprocessors"] = [{"key": "FFmpegSubtitlesConvertor", "format": "srt"}]
+    if FFMPEG_PATH:
+        opts["postprocessors"] = [{"key": "FFmpegSubtitlesConvertor", "format": "srt"}]
 
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
