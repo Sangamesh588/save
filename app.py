@@ -3,7 +3,7 @@ import io
 import mimetypes
 import logging
 import requests
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -49,18 +49,25 @@ def ratelimit_handler(e):
 
 
 @app.route("/")
+@app.route("/api/index")
+@app.route("/api/index.py")
 def index():
     return render_template("index.html")
 
 
+@app.route("/static/<path:filename>")
+def static_files(filename):
+    return send_from_directory(os.path.join(BASE_DIR, "static"), filename)
+
+
 @app.route("/manifest.json")
 def manifest():
-    return send_file(os.path.join(app.static_folder, "manifest.json"), mimetype="application/manifest+json")
+    return send_from_directory(os.path.join(BASE_DIR, "static"), "manifest.json", mimetype="application/manifest+json")
 
 
 @app.route("/sw.js")
 def service_worker():
-    response = send_file(os.path.join(app.static_folder, "sw.js"), mimetype="application/javascript")
+    response = send_from_directory(os.path.join(BASE_DIR, "static"), "sw.js", mimetype="application/javascript")
     response.headers["Service-Worker-Allowed"] = "/"
     response.headers["Cache-Control"] = "no-cache"
     return response
