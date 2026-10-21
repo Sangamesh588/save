@@ -113,13 +113,12 @@ def get_base_ydl_opts() -> dict:
         ),
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios"],
-                "player_skip": ["configs", "webpage"]
+                "player_client": ["android", "ios"]
             }
         }
     }
 
-    # Support optional cookies (via YOUTUBE_COOKIES env var or cookies.txt file)
+    # Support optional cookies if explicitly configured
     cookies_env = os.environ.get("YOUTUBE_COOKIES")
     cookies_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
     if cookies_env:
